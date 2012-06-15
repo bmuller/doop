@@ -84,7 +84,7 @@ function run() {
 	    hadoop "rm" $(absolute $2)
 	    ;;
 	mkdir)
-	    hadoop "$*"
+	    hadoop "mkdir" $(absolute $2)
 	    ;;
 	exit)
 	    exit 0
