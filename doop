@@ -1,0 +1,132 @@
+#!/bin/bash
+
+if [ "$HADOOP_HOME" == "" ]; then
+   echo HADOOP_HOME environment variable must be set.
+   exit 1
+fi
+
+function hadoop {
+    if [ "$VERBOSE" == "1" ]; then 
+	echo Executing: $HADOOP_HOME/bin/hadoop dfs -$*
+    fi
+    $HADOOP_HOME/bin/hadoop dfs -$*
+}
+
+function usage {
+    echo "Usage: $0 <options>"
+    echo "where options can be one of:"
+    echo -e " -h\tPrint out this help."
+    echo -e " -v\tPrint out each command prior to execution."
+    echo
+    echo "Shell commands:"
+    echo -e " ls\t\tList all files and folders in current folder"
+    echo -e " lsr\t\tList all files and folders in current folder, recursively"
+    echo -e " cd <path>\tChange directory to given <path>."
+    echo -e " pwd\t\tPrint out current working directory."
+    echo -e " df\t\tShow current filesystem usage."
+    echo -e " rm <path>\tRemove file at <path>."
+    echo -e " get <path>\tDownload file at <path> to CWD locally."
+    echo -e " put <path>\tUpload file at local <path> to remote CWD."
+    echo -e " mkdir <path>\tMake directory at given <path>."
+    echo -e " cat <path>\tCat file at <path>"
+    echo -e " tail <path>\tTail file at <path>"
+    echo -e " exit\t\tExit."
+    echo
+    echo "Any command preceeded by a ! will be executed locally."
+}
+
+function absolute {
+    if [ "${1:0:1}" == "/" ]; then 
+	echo $1
+    else
+	if [ "$CWD" == "/" ]; then
+	    echo /$1
+	else
+	    echo $CWD/$1
+	fi
+    fi
+}
+
+function run() {
+    case "$1" in
+	cd)
+	    NPATH=$(absolute $2)
+	    hadoop "stat" $NPATH &> /dev/null
+	    if [ "$?" == "0" ]; then CWD=$NPATH; else echo "No such directory: $NPATH"; fi
+	    ;;
+	pwd)
+	    echo $CWD
+	    ;;
+	tail)
+	    hadoop tail $(absolute $2)
+	    ;;
+	ls)
+	    hadoop ls $CWD
+	    ;;
+	lsr)
+	    hadoop lsr $CWD
+	    ;;
+	df)
+	    hadoop "$*"
+	    ;;
+	get)
+	    echo "Downloading $(absolute $2) to ./$(basename $2)"
+	    hadoop "get" $(absolute $2) ./$(basename $2)
+	    ;;
+	put)
+	    echo "Uploading $2 to $(absolute $(basename $2))"
+	    hadoop "put" $2 $(absolute $(basename $2))
+	    ;;
+	cat)
+	    hadoop "cat" $(absolute $2)
+	    ;;
+	rm)
+	    hadoop "rm" $(absolute $2)
+	    ;;
+	mkdir)
+	    hadoop "$*"
+	    ;;
+	exit)
+	    exit 0
+	    ;;
+	quit)
+	    exit 0
+	    ;;
+	*)
+	    echo "Command '$1' not found."
+	    ;;
+    esac
+}
+
+
+HNAME=$(basename $HADOOP_HOME)
+CWD=/
+VERBOSE=0
+
+while getopts ":hv" Option; do
+    case $Option in
+	h)
+	    usage $@
+	    exit 0
+            ;;
+	v)
+	    VERBOSE=1
+            ;;
+	*)
+            echo "No such option -$Option"
+	    usage $@
+	    exit 0
+            ;;
+    esac
+done
+shift $(($OPTIND - 1))
+
+while true
+do
+    read -p "$HNAME:$CWD> " cmd
+    if [ "${cmd:0:1}" == "!" ]; then
+	eval ${cmd:1}
+    else
+	run $cmd
+    fi
+done
